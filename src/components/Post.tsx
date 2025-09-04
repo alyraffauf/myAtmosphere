@@ -50,9 +50,9 @@ const Post: React.FC<PostProps> = ({ post, handle, isInThread = false }) => {
       embeddedRecord = embed.record as BlueskyEmbeddedRecord;
     } else if (embed.$type === "app.bsky.embed.recordWithMedia#view") {
       embeddedRecord = embed.record?.record || null;
-      if (embed.media && embed.media.images) {
-        embeddedImages = embed.media.images.map((img) => img.fullsize);
-      }
+      // if (embed.media && embed.media.images) {
+      //   embeddedImages = embed.media.images.map((img) => img.fullsize);
+      // }
     }
 
     if (
