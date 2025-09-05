@@ -1,8 +1,10 @@
 // Bluesky API utilities
+import { cache } from "./cache";
+
 const BLUESKY_API_BASE = "https://public.api.bsky.app/xrpc";
 
-// Types
-export interface BlueskyAuthor {
+// Types for Bluesky API responses
+interface BlueskyAuthor {
   did: string;
   handle: string;
   displayName?: string;
@@ -74,14 +76,9 @@ export interface BlueskyThreadItem extends BlueskyFeedItem {
   isThreadRoot: boolean;
 }
 
-export interface BlueskyFeedResponse {
-  feed: BlueskyFeedItem[];
-  cursor?: string;
-}
-
 export interface PostsResponse {
   posts: BlueskyThreadItem[];
-  cursor?: string;
+  cursor?: string | null;
 }
 
 export interface ProfileData {
@@ -99,14 +96,18 @@ export interface ProfileData {
 }
 
 // Cache for storing profile data including avatars
-const profileCache = new Map<string, ProfileData>();
-
 /**
- * Fetch user profile information
+ * Fetch user profile information with caching
  */
 export async function fetchUserProfile(
   handle: string,
 ): Promise<ProfileData | null> {
+  // Check cache first
+  const cached = cache.getProfile(handle);
+  if (cached) {
+    return cached;
+  }
+
   try {
     const response = await fetch(
       `${BLUESKY_API_BASE}/app.bsky.actor.getProfile?actor=${handle}`,
@@ -118,7 +119,12 @@ export async function fetchUserProfile(
       );
     }
 
-    return await response.json();
+    const profile = await response.json();
+
+    // Cache the profile
+    cache.setProfile(handle, profile);
+
+    return profile;
   } catch (error) {
     console.error("Error fetching user profile:", error);
     return null;
@@ -132,8 +138,20 @@ export async function fetchUserPosts(
   handle: string,
   cursor: string | null = null,
   limit: number = 25,
+  useCache: boolean = true,
 ): Promise<PostsResponse> {
   try {
+    // Check cache first for initial load (when cursor is null)
+    if (useCache && !cursor) {
+      const cached = cache.getPosts(handle);
+      if (cached) {
+        return {
+          posts: cached.posts,
+          cursor: cached.cursor,
+        };
+      }
+    }
+
     // First, resolve the handle to get the DID
     const resolveResponse = await fetch(
       `${BLUESKY_API_BASE}/com.atproto.identity.resolveHandle?handle=${handle}`,
@@ -180,6 +198,11 @@ export async function fetchUserPosts(
     // Enhance posts with avatar data
     const enhancedPosts = await enhancePostsWithAvatars(threadedPosts);
 
+    // Cache the results
+    if (useCache) {
+      cache.setPosts(handle, enhancedPosts, data.cursor, !cursor);
+    }
+
     return {
       posts: enhancedPosts,
       cursor: data.cursor,
@@ -195,8 +218,9 @@ export async function fetchUserPosts(
  */
 async function fetchProfileData(did: string): Promise<ProfileData | null> {
   // Check cache first
-  if (profileCache.has(did)) {
-    return profileCache.get(did) || null;
+  const cached = cache.getProfile(did);
+  if (cached) {
+    return cached;
   }
 
   try {
@@ -207,7 +231,7 @@ async function fetchProfileData(did: string): Promise<ProfileData | null> {
     if (response.ok) {
       const profileData = await response.json();
       // Cache the profile data
-      profileCache.set(did, profileData);
+      cache.setProfile(did, profileData);
       return profileData;
     }
   } catch (error) {
@@ -268,7 +292,7 @@ async function enhancePostsWithAvatars(
     threadItem: BlueskyThreadItem,
   ): BlueskyThreadItem {
     const post = threadItem.post;
-    const authorProfile = profileCache.get(post.author.did);
+    const authorProfile = cache.getProfile(post.author.did);
 
     if (authorProfile && authorProfile.avatar) {
       post.author.avatar = authorProfile.avatar;
@@ -281,7 +305,7 @@ async function enhancePostsWithAvatars(
         post.embed.record
       ) {
         if (post.embed.record.author) {
-          const embeddedAuthorProfile = profileCache.get(
+          const embeddedAuthorProfile = cache.getProfile(
             post.embed.record.author.did,
           );
           if (embeddedAuthorProfile && embeddedAuthorProfile.avatar) {
@@ -293,7 +317,7 @@ async function enhancePostsWithAvatars(
         post.embed.record?.record
       ) {
         if (post.embed.record.record.author) {
-          const embeddedAuthorProfile = profileCache.get(
+          const embeddedAuthorProfile = cache.getProfile(
             post.embed.record.record.author.did,
           );
           if (embeddedAuthorProfile && embeddedAuthorProfile.avatar) {

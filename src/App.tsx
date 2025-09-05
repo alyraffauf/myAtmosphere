@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import InfiniteScroll from "react-infinite-scroll-component";
 import Thread from "./components/Thread";
 import LoadingSkeletons, {
@@ -11,6 +11,7 @@ import {
   type BlueskyThreadItem,
   type ProfileData,
 } from "./utils/bluesky";
+import { cache } from "./utils/cache";
 
 const HANDLE = "aly.ruffruff.party";
 const PROFILE_URL = `https://bsky.app/profile/${HANDLE}`;
@@ -23,17 +24,41 @@ function App(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [profileLoading, setProfileLoading] = useState<boolean>(true);
+  const preloadTriggered = useRef<boolean>(false);
   const loadPosts = useCallback(
     async (isInitial = false) => {
       try {
         if (isInitial) {
-          setLoading(true);
           setError(null);
+
+          // Check cache first for instant loading
+          const cached = cache.getPosts(HANDLE);
+          if (cached) {
+            setThreads(cached.posts);
+            setCursor(cached.cursor);
+            setHasMore(!!cached.cursor && cached.posts.length > 0);
+            setLoading(false);
+
+            // Start background refresh if cache is getting stale
+            const freshness = cache.getCacheFreshness(HANDLE);
+            if (freshness && freshness.age > 60000) {
+              // 1 minute
+              const response = await fetchUserPosts(HANDLE, null, 25, false);
+              setThreads(response.posts);
+              setCursor(response.cursor || null);
+              setHasMore(!!response.cursor && response.posts.length > 0);
+            }
+            return;
+          }
+
+          setLoading(true);
         }
 
         const response = await fetchUserPosts(
           HANDLE,
           isInitial ? null : cursor,
+          25,
+          true,
         );
 
         if (isInitial) {
@@ -63,7 +88,15 @@ function App(): JSX.Element {
     // Load both profile and posts
     const loadInitialData = async () => {
       try {
-        setProfileLoading(true);
+        // Check for cached profile first
+        const cachedProfile = cache.getProfile(HANDLE);
+        if (cachedProfile) {
+          setProfile(cachedProfile);
+          setProfileLoading(false);
+        } else {
+          setProfileLoading(true);
+        }
+
         const profileData = await fetchUserProfile(HANDLE);
         if (profileData) {
           setProfile(profileData);
@@ -77,17 +110,47 @@ function App(): JSX.Element {
 
     loadInitialData();
     loadPosts(true);
-  }, []);
+  }, [loadPosts]);
 
   const handleViewBluesky = (): void => {
     window.open(PROFILE_URL, "_blank", "noopener,noreferrer");
   };
 
-  const fetchMorePosts = (): void => {
+  const fetchMorePosts = useCallback((): void => {
     if (cursor && hasMore) {
       loadPosts(false);
     }
-  };
+  }, [cursor, hasMore, loadPosts]);
+
+  // Preload next batch when user is near the end
+  const handleScroll = useCallback(() => {
+    const scrollPosition = window.scrollY + window.innerHeight;
+    const documentHeight = document.documentElement.scrollHeight;
+    const threshold = 0.8; // Preload when 80% scrolled
+
+    if (
+      scrollPosition >= documentHeight * threshold &&
+      cursor &&
+      hasMore &&
+      !preloadTriggered.current &&
+      !loading
+    ) {
+      preloadTriggered.current = true;
+
+      // Preload silently in background
+      cache.preloadNextBatch(HANDLE, fetchUserPosts).then(() => {
+        // Reset trigger after a delay to allow for more preloading
+        setTimeout(() => {
+          preloadTriggered.current = false;
+        }, 2000);
+      });
+    }
+  }, [cursor, hasMore, loading]);
+
+  useEffect(() => {
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
 
   if (loading) {
     return (
@@ -164,7 +227,16 @@ function App(): JSX.Element {
             </div>
           }
           refreshFunction={() => loadPosts(true)}
-          pullDownToRefresh={false}
+          pullDownToRefresh={true}
+          pullDownToRefreshThreshold={50}
+          pullDownToRefreshContent={
+            <h3 style={{ textAlign: "center" }}>
+              &#8595; Pull down to refresh
+            </h3>
+          }
+          releaseToRefreshContent={
+            <h3 style={{ textAlign: "center" }}>&#8593; Release to refresh</h3>
+          }
         >
           <div className="posts-container">
             {threads.map((thread, index) => (
