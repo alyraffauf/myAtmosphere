@@ -21,6 +21,7 @@ function App(): JSX.Element {
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isPaginating, setIsPaginating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [profileLoading, setProfileLoading] = useState<boolean>(true);
@@ -54,6 +55,10 @@ function App(): JSX.Element {
           setLoading(true);
         }
 
+        if (!isInitial) {
+          setIsPaginating(true);
+        }
+
         const response = await fetchUserPosts(
           HANDLE,
           isInitial ? null : cursor,
@@ -78,6 +83,8 @@ function App(): JSX.Element {
       } finally {
         if (isInitial) {
           setLoading(false);
+        } else {
+          setIsPaginating(false);
         }
       }
     },
@@ -162,7 +169,11 @@ function App(): JSX.Element {
             <Profile profile={profile} onViewBluesky={handleViewBluesky} />
           )
         )}
-        <LoadingSkeletons count={5} />
+        <div className="loading-dots">
+          <div className="dot"></div>
+          <div className="dot"></div>
+          <div className="dot"></div>
+        </div>
       </div>
     );
   }
@@ -246,6 +257,15 @@ function App(): JSX.Element {
                 handle={HANDLE}
               />
             ))}
+
+            {/* Bottom loading indicator */}
+            {isPaginating && (
+              <div className="loading-dots">
+                <div className="dot"></div>
+                <div className="dot"></div>
+                <div className="dot"></div>
+              </div>
+            )}
           </div>
         </InfiniteScroll>
       )}
