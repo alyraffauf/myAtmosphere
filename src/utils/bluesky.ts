@@ -85,6 +85,7 @@ export interface ProfileData {
   did: string;
   handle: string;
   displayName?: string;
+  pronouns?: string;
   avatar?: string;
   banner?: string;
   description?: string;

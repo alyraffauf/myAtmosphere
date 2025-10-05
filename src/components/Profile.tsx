@@ -42,6 +42,9 @@ const Profile: React.FC<ProfileProps> = ({ profile, onViewBluesky }) => {
             <div className="header-info">
               <h2 className="header-display-name">
                 {profile.displayName || profile.handle}
+                {profile.pronouns && (
+                  <span className="pronouns">({profile.pronouns})</span>
+                )}
               </h2>
               <p className="header-handle">@{profile.handle}</p>
             </div>
