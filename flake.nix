@@ -21,7 +21,7 @@
 
           src = ./.;
 
-          npmDepsHash = "sha256-A3yapKXIaPSqxQxkTWk+288cG2QkhyZg11MAfpP7mnU=";
+          npmDepsHash = "sha256-0bmL7hib7UjdoIpgfQrq5fhVX6EW12yzzIjx5PSrTJg=";
 
           # Don't run tests during build
           npmBuildScript = "build";
