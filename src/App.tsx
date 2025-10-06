@@ -13,7 +13,7 @@ import {
 } from "./utils/bluesky";
 import { cache } from "./utils/cache";
 
-const HANDLE = "aly.ruffruff.party";
+const HANDLE = "old.ruffruff.party";
 const PROFILE_URL = `https://bsky.app/profile/${HANDLE}`;
 
 function App(): JSX.Element {
