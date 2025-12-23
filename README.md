@@ -21,7 +21,7 @@ The built files go in the `dist` folder.
 
 ## What it does
 
-- Shows posts from aly.ruffruff.party in chronological order
+- Shows posts from aly.codes in chronological order
 - Filters out replies (except self-replies)
 - Infinite scroll to load more posts
 - Click any post to view it on bsky.app
